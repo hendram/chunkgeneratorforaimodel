@@ -64,7 +64,10 @@ try {
 
     if (data.answer === "yes") {
       // Only send the site field
-      topicToSend = { site: topic.site };
+      const newtopic = { ignoresearched: topic.searched,
+                site: topic.site
+              }     
+      topicToSend = { onlyforsite: newtopic };
       console.log(" ^|^e Vectorized said YES, sending only site to Puppeteer");
     } else {
       // Send full original topic
