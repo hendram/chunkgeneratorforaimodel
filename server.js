@@ -58,6 +58,7 @@ try {
     }
 
     const data = await response.json();
+    console.log("data", data.answer, data.reason);    
 
     let topicToSend;
 
