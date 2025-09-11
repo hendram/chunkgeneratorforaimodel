@@ -1,7 +1,8 @@
 import express from "express";
 import applyCors from "./lib/cors.js";
 import { registerStream } from "./lib/stream.js";
-import { sendMessage, startConsumer } from "./lib/kafka.js";
+import { sendMessage, startConsumer, startPuppeteerConsumer } from "./lib/kafka.js";
+import eventBus from "./lib/events.js";
 
 const app = express();
 app.use(express.json());
@@ -26,7 +27,7 @@ app.post("/search", async (req, res) => {
   try {
     if (topic.corporate && topic.corporate !== "") {
       // Send message to Puppeteer via Kafka
-      await sendMessage({ query: topic });
+      await sendMessage({query: topic});
       console.log("Sent corporate job to Kafka for Puppeteer");
       return res.status(200).json({
         success: true,
@@ -59,30 +60,48 @@ try {
 
     const data = await response.json();
     console.log("data", data.answer, data.reason);    
+  
 
     let topicToSend;
+    let separatesiteToSend;
+    let returnValue = false;
 
     if (data.answer === "yes") {
       // Only send the site field
-      const newtopic = { ignoresearched: topic.searched,
+       separatesiteToSend = { ignoresearched: topic.searched,
                 site: topic.site
               }     
-      topicToSend = { onlyforsite: newtopic };
+
+    await sendMessage({query: separatesiteToSend });
+
       console.log(" ^|^e Vectorized said YES, sending only site to Puppeteer");
     } else {
       // Send full original topic
-      topicToSend = topic;
+        
+       topicToSend = { searched: topic.searched,
+                        searchEngine: topic.searchEngine };
+
+
+      separatesiteToSend = { onlyforsite: topic.site };
       console.log(" ^|^i Vectorized said NO, sending full topic to Puppeteer");
+
+      await sendMessage({query: topicToSend });
+
+      const returnValue = await new Promise(resolve => {
+    eventBus.once("statusChanged", data => {
+      resolve(data.returnValue);
+    });
+  });
+
+  if (returnValue) {
+    await sendMessage({ query: separatesiteToSend });
+    return;
+  }
     }
 
-    await sendMessage({ query: topicToSend });
-    return {
-      success: true,
-      message: "Job dispatched to Puppeteer",
-      sentTopic: topicToSend
-    };
-  }
-  else if(topic.searched === ""){
+    return;
+}
+    else if(topic.searched === ""){
        return res.status(400).json({
         success: false,
         message: "No searched keyword",
@@ -102,6 +121,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(` ^=^z^ Server running on port ${PORT}`);
   console.log(" ^=^t^d Starting Kafka consumer...");
-  await startConsumer(); // <--- this was missing in your code
+  await startConsumer();
+  await startPuppeteerConsumer() // <--- this was missing in your code
 });
 
