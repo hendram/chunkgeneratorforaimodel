@@ -22,19 +22,16 @@ app.post("/search", async (req, res) => {
   const { topic } = req.body;
   if (!topic) return res.status(400).json({ error: "Topic is required" });
 
-  console.log(" ^=^s Received search request:", topic);
 
   try {
     if (topic.corporate && topic.corporate !== "") {
       // Send message to Puppeteer via Kafka
       await sendMessage({query: topic});
-      console.log("Sent corporate job to Kafka for Puppeteer");
       return res.status(200).json({
         success: true,
         message: "Corporate job dispatched",
       });
     } else if(topic.corporate === "") {
-      console.log("No corporate topic provided. Skipping Puppeteer.");
       return res.status(200).json({
         success: false,
         message: "No corporate topic",
@@ -59,7 +56,6 @@ try {
     }
 
     const data = await response.json();
-    console.log("data", data.answer, data.reason);    
   
 
     let topicToSend;
@@ -74,7 +70,6 @@ try {
 
     await sendMessage({query: separatesiteToSend });
 
-      console.log(" ^|^e Vectorized said YES, sending only site to Puppeteer");
     } else {
       // Send full original topic
         
@@ -83,7 +78,6 @@ try {
 
 
       separatesiteToSend = { onlyforsite: topic.site };
-      console.log(" ^|^i Vectorized said NO, sending full topic to Puppeteer");
 
       await sendMessage({query: topicToSend });
 
@@ -119,8 +113,6 @@ try {
 // Start server + Kafka consumer
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
-  console.log(` ^=^z^ Server running on port ${PORT}`);
-  console.log(" ^=^t^d Starting Kafka consumer...");
   await startConsumer();
   await startPuppeteerConsumer() // <--- this was missing in your code
 });
