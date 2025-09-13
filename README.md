@@ -41,6 +41,8 @@ The backend accepts messages from the **frontend** in two formats:
 
 ### 🔍 Search Job
 
+For Example:
+
 ```bash
 {
   "topic": {
@@ -56,6 +58,8 @@ The backend accepts messages from the **frontend** in two formats:
 or
 
 ###🏢 Corporate Knowledge Base Database Population Job
+
+For Example:
 
 ```bash
 topic: { corporate: "https://hendram.github.io/Knowledgebase/",
