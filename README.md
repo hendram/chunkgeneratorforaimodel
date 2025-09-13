@@ -120,7 +120,7 @@ The original message is **split into two smaller jobs**:
 ✅ This ensures the **best possible Q&A results** are returned.  
 
 
-#### 💼 For Corporate Database Populate Jobs
+#### 2️⃣For Corporate Database Populate Jobs 
 
 1. 🔑 A message with the **corporate key** just received from autoansweringform(frontend) is sent **directly** to Puppeteer.  
 2. 🖥️ Puppeteer scrapes the **content**.  
