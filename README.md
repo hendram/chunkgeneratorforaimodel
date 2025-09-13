@@ -34,14 +34,14 @@ Packages that interact with it:
 The backend accepts messages from the **frontend** in two formats:
 
 ### 🔍 Search Job
-```json
+
 ## ⚙️ How It Works
 
 The backend accepts messages from the **frontend** in two formats:
 
 ### 🔍 Search Job
 
-```json
+```bash
 {
   "topic": {
     "searched": "tidb vector --filetype=html --filetype=xhtml --filetype=text",
@@ -57,7 +57,7 @@ or
 
 ###🏢 Corporate Knowledge Base Database Population Job
 
-```json
+```bash
 topic: { corporate: "https://hendram.github.io/Knowledgebase/",
          topic: "mongodb rag"
 }
