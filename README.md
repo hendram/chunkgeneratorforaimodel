@@ -173,7 +173,7 @@ The original message is **split into two smaller jobs**:
 
 ---
 
-⚡ Platform Requirements
+## ⚡ Platform Requirements
 
 💾 At least 12 GB RAM
 
@@ -184,22 +184,22 @@ The original message is **split into two smaller jobs**:
 
 ---
 
-🚀 How to Run It
+## 🚀 How to Run It
 
 
-📥 Download
+#### 📥 Download
 
 ```bash
 docker pull ghcr.io/hendram/chunkgeneratorforaimodel
 ```
 
-▶️ Start
+#### ▶️ Start
 
 ```bash
 docker run -it -d --network=host ghcr.io/hendram/chunkgeneratorforaimodel bash
 ```
 
-🔍 Check Running Container
+#### 🔍 Check Running Container
 
 ```bash
 docker ps
@@ -210,17 +210,254 @@ CONTAINER ID   IMAGE                                         NAME               
 123abc456def   ghcr.io/hendram/chunkgeneratorforaimodel      practical_chatterjee    Up 5 minutes
 ```
 
-📦 Enter Container
+#### 📦 Enter Container
 
 ```bash
 docker exec -it practical_chatterjee /bin/bash
 ```
 
-🏃 Run the Service
+#### 🏃 Run the Service
 
 ```bash
 cd /home/chunkgeneratorforaimodel
 node server.js
 ```
 
+# 🖥️  Code Overview
+
+####  server.js
+
+This Node.js server handles real-time streaming, Kafka messaging, and Puppeteer job dispatching. It also integrates with a FastAPI endpoint for database insertion.
+
+---
+
+## ⚡ Technologies Used
+
+- **Node.js** + **Express**: Server framework
+- **Kafka**: Message queue for async processing
+- **Puppeteer**: Headless browser automation
+- **EventBus**: Internal event management
+- **CORS**: Cross-origin request handling
+- **Fetch API**: Calling external FastAPI endpoint
+
+---
+
+## 🚀 Key Features
+
+###  1️⃣ CORS Middleware
+
+```bash
+app.use((req, res, next) => {
+  if (applyCors(req, res)) return; // handles preflight requests
+  next();
+});
+```
+
+###  2️⃣ Streaming Endpoint
+
+```bash
+app.get("/stream", (req, res) => {
+  registerStream(req, res);
+});
+```
+
+  Registers a streaming connection for clients.
+
+###  3️⃣ Job Submission (/search)
+
+```bash
+app.post("/search", async (req, res) => { ... });
+```
+
+  Handles topic submissions and routes jobs:
+
+
+###  ✅ Corporate Job Dispatch:
+
+If topic.corporate exists, send to Puppeteer via Kafka.
+
+####  ⚠️ Empty Corporate Topic:
+
+Responds with No corporate topic.
+
+####  🔍 Searched Keyword:
+
+Calls FastAPI insertsearchtodb, handles response, and sends relevant messages to Kafka.
+
+####  ❌ Missing Keyword:
+
+Responds with No searched keyword.
+
+Internal Flow:
+
+Log topic variables with timestamp.
+
+Call FastAPI for vectorized search insertion.
+
+Depending on FastAPI response:
+
+Send only site info if answer === "yes".
+
+Otherwise, send full topic, then optionally send site info after statusChanged event.
+
+###  4️⃣ Kafka Consumers
+
+```bash
+await startConsumer();
+await startPuppeteerConsumer();
+```
+
+Starts Kafka consumers on server boot:
+
+startConsumer: General processing
+
+startPuppeteerConsumer: Puppeteer job processing
+
+###  5️⃣ Server Start
+
+```bash
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, async () => { ... });
+```
+
+Server listens on port 3000 (default)
+
+Initializes Kafka consumers at startup.
+
+####  📝 Utility Functions
+
+Logging
+
+```bash
+function logTopicVariable(topic) {
+  const now = new Date();
+  const ts = now.toISOString().replace("T", " ").replace("Z", "");
+  const ms = String(now.getMilliseconds()).padStart(3, "0");
+  console.log(`[${ts},${ms}] INFO Sending request to insertsearchtodb ${JSON.stringify(topic)}`);
+}
+```
+
+Logs each topic with timestamp + milliseconds.
+
+Helps track database insertion requests.
+
+#### 🔗 Flow Diagram
+
+```bash
+Client -> /search POST -> Validate topic
+         ├─ corporate exists -> Kafka -> Puppeteer
+         └─ searched keyword -> FastAPI -> Kafka -> EventBus
+```
+
+# 🌊 Stream Module (`/lib/stream.js`)
+
+This module handles **Server-Sent Events (SSE)**, allowing the server to push real-time updates to connected clients.
+
+---
+
+## ⚡ Key Features
+
+###  1️⃣ Connected Clients
+
+```bash
+const clients = [];
+```
+Maintains an array of all currently connected SSE clients.
+
+###  2️⃣ Structured Logger
+```bash
+function logSSE(event, details = {}) {
+  console.log(JSON.stringify({
+    level: "INFO",
+    timestamp: new Date().toISOString(),
+    logger: "sse",
+    event,
+    ...details
+  }));
+}
+```
+
+Logs all SSE activity in JSON format.
+
+Includes event type, timestamp, and additional details.
+
+Useful for debugging and monitoring live streams.
+
+###  3️⃣ Broadcast Results
+
+```bash
+export function handleResultToStream(allBest) { ... }
+```
+
+Sends a JSON payload (allBest) to all connected clients.
+
+Logs:
+
+clients_count: Number of connected clients
+
+payload_size: Size of payload in bytes
+
+Sends a heartbeat comment (:heartbeat) to clients every 5 seconds to keep connections alive.
+
+
+###  4️⃣ Register New Client
+
+```bash
+export function registerStream(req, res) { ... }
+```
+
+Sets SSE headers:
+
+Content-Type: text/event-stream
+
+Cache-Control: no-cache
+
+Connection: keep-alive
+
+Adds the client res to the clients array.
+
+Logs:
+
+client_connected with current client count
+
+Handles client disconnects:
+
+Removes disconnected clients
+
+Logs client_disconnected event
+
+###  5️⃣ Global Heartbeat
+
+```bash
+setInterval(() => {
+  clients.forEach((res) => res.write(":heartbeat\n\n"));
+  if (clients.length > 0) {
+    logSSE("heartbeat", { clients_count: clients.length });
+  }
+}, 10000);
+```
+
+Sends a global heartbeat every 10 seconds to all clients.
+
+Keeps SSE connections alive.
+
+Logs heartbeat events only if clients are connected.
+
+#### 📝 Usage
+
+Register a new client:
+
+```bash
+app.get("/stream", (req, res) => {
+  registerStream(req, res);
+});
+```
+Push results to clients:
+
+```bash
+handleResultToStream(allBestArray);
+```
+
+allBestArray is any array of results you want to broadcast.
 
