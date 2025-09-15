@@ -24,14 +24,14 @@ app.post("/search", async (req, res) => {
 
 
   try {
-    if (topic.corporate && topic.corporate !== "") {
+    if (topic && topic.corporate && topic.corporate !== "") {
       // Send message to Puppeteer via Kafka
       await sendMessage({query: topic});
       return res.status(200).json({
         success: true,
         message: "Corporate job dispatched",
       });
-    } else if(topic.corporate === "") {
+    } else if(topic && topic.corporate === "") {
       return res.status(200).json({
         success: false,
         message: "No corporate topic",
@@ -43,7 +43,7 @@ app.post("/search", async (req, res) => {
   }
 
 try {
-  if (topic.searched && topic.searched !== "") {
+  if (topic && topic.searched && topic.searched !== "") {
     // 1️⃣ Call the FastAPI endpoint
     const response = await fetch("http://localhost:8000/insertsearchtodb", {
       method: "POST",
@@ -95,7 +95,7 @@ try {
 
     return;
 }
-    else if(topic.searched === ""){
+    else if(topic && topic.searched === ""){
        return res.status(400).json({
         success: false,
         message: "No searched keyword",
