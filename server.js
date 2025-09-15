@@ -17,6 +17,14 @@ app.get("/stream", (req, res) => {
   registerStream(req, res);
 });
 
+function logTopicVariable(topic) {
+  const now = new Date();
+  const ts = now.toISOString().replace("T", " ").replace("Z", "");
+  const ms = String(now.getMilliseconds()).padStart(3, "0");
+  console.log(`[${ts},${ms}] INFO Sending request to insertsearchtodb ${JSON.stringify(topic)}`);
+}
+
+
 // Route: Submit job to Puppeteer via Kafka
 app.post("/search", async (req, res) => {
   const { topic } = req.body;
@@ -37,13 +45,11 @@ app.post("/search", async (req, res) => {
         message: "No corporate topic",
       });
     }
-  } catch (err) {
-    console.error("API Error:", err);
-    return res.status(500).json({ error: err.message });
-  }
 
-try {
+
   if (topic && topic.searched && topic.searched !== "") {
+    logTopicVariable(topic);
+
     // 1️⃣ Call the FastAPI endpoint
     const response = await fetch("http://localhost:8000/insertsearchtodb", {
       method: "POST",
