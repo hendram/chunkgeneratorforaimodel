@@ -288,7 +288,7 @@ Calls FastAPI insertsearchtodb, handles response, and sends relevant messages to
 
 Responds with No searched keyword.
 
-Internal Flow:
+####  Internal Flow:
 
 Log topic variables with timestamp.
 
@@ -350,6 +350,8 @@ Client -> /search POST -> Validate topic
          └─ searched keyword -> FastAPI -> Kafka -> EventBus
 ```
 
+---
+
 # 🌊 Stream Module (`/lib/stream.js`)
 
 This module handles **Server-Sent Events (SSE)**, allowing the server to push real-time updates to connected clients.
@@ -392,11 +394,13 @@ export function handleResultToStream(allBest) { ... }
 
 Sends a JSON payload (allBest) to all connected clients.
 
-Logs:
+####  Logs:
 
+```bash
 clients_count: Number of connected clients
 
 payload_size: Size of payload in bytes
+```
 
 Sends a heartbeat comment (:heartbeat) to clients every 5 seconds to keep connections alive.
 
@@ -407,7 +411,7 @@ Sends a heartbeat comment (:heartbeat) to clients every 5 seconds to keep connec
 export function registerStream(req, res) { ... }
 ```
 
-Sets SSE headers:
+####  Sets SSE headers:
 
 Content-Type: text/event-stream
 
@@ -417,7 +421,7 @@ Connection: keep-alive
 
 Adds the client res to the clients array.
 
-Logs:
+####  Logs:
 
 client_connected with current client count
 
@@ -461,3 +465,278 @@ handleResultToStream(allBestArray);
 
 allBestArray is any array of results you want to broadcast.
 
+---
+
+# ☕ Kafka Module (`/lib/kafka.js`)
+
+This module manages **Kafka producers and consumers** for handling job dispatching, Puppeteer processing, and search results. It integrates **event-based logic** to retry failed jobs and ensures robust processing of messages.
+
+---
+
+## ⚡ Key Features
+
+### 1️⃣ Kafka Setup
+
+```bash
+const kafka = new Kafka({ 
+  clientId: "scrapbackend", 
+  brokers: ["localhost:9092"] 
+});
+```
+
+####  Creates Kafka clients and producers:
+
+producer: For general job dispatch
+
+topProducer: For Puppeteer worker jobs
+
+Consumers:
+
+consumer: Handles /search and corporate results
+
+puppeteerConsumer: Handles results from Puppeteer worker
+
+Heartbeat interval and session timeout configured for stability.
+
+###  2️⃣ Send Messages
+
+```bash
+export async function sendMessage(data) { ... }
+```
+
+Sends a message to the "fromscrap" topic (Puppeteer jobs).
+
+Logs message delivery status in JSON style:
+
+✅ Success
+
+❌ Error
+
+Includes payload size and preview.
+
+```bash
+export async function sendToPuppeteerWorker(data) { ... }
+```
+
+Sends job to "topuppeteerworker" topic.
+
+Uses EventBus to retry messages if a timeout occurs.
+
+Logs every action in structured JSON.
+
+###  3️⃣ Consumer: General Job Processing
+
+```bash
+export async function startConsumer() { ... }
+```
+
+Subscribes to "toscrap-results" topic.
+
+####  Handles incoming messages:
+
+Corporate results → handleResult
+
+Site results → directToLLM
+
+Links array → split into 3 parts and sent to Puppeteer worker
+
+Includes helper function splitIntoThreeParts to divide large payloads.
+
+###  4️⃣ Consumer: Puppeteer Worker
+
+```bash
+export async function startPuppeteerConsumer() { ... }
+```
+
+Subscribes to "frompuppeteerworker" topic.
+
+####  Buffers job results using puppeteerBuffer:
+
+Tracks jobIds to avoid duplicates
+
+Collects results until all expected jobs are received
+
+####  Uses timeout logic (3 minutes) to resend incomplete jobs via EventBus:
+
+Ensures no job is lost
+
+Logs events with ✅, ⚠️, 🎯 for clarity
+
+Calls handleResult when all expected jobs are collected.
+
+###  5️⃣ EventBus Integration
+
+```bash
+eventBus.on("sending again", async (signal) => { ... });
+```
+
+Listens for resending signals from Puppeteer consumer timeout.
+
+Ensures reliability in asynchronous job processing.
+
+###  6️⃣ Utility Functions
+
+```bash
+function splitIntoThreeParts(array) { ... }
+```
+
+Splits an array into 3 non-overlapping chunks for efficient Puppeteer job distribution.
+
+#### 🔗 Flow Diagram
+
+```bash
+/search POST → Kafka Producer → Puppeteer Worker
+             ↘ Kafka Consumer → handleResult / directToLLM
+fromPuppeteerWorker → PuppeteerConsumer → buffer → handleResult
+EventBus → retry messages on timeout
+```
+
+### 📝 Logging
+
+All actions are logged in JSON format for structured monitoring.
+
+####  Includes:
+
+Timestamp
+
+Logger name
+
+Event type
+
+Payload size & preview
+
+Errors (if any)
+
+
+---
+
+
+# 🛠️ Processor Module (`/lib/processor.js`)
+
+This module handles **htmltext processing, chunking, vectorization, and LLM integration** for search results and corporate data.
+
+---
+
+## ⚡ Key Features
+
+### 1️⃣ Chunking
+
+```js
+export function cleanAndChunk(results) { ... }
+```
+
+####  Cleans raw HTML/text:
+
+Removes URLs
+
+Splits into lines and trims whitespace
+
+Filters lines with at least 3 words
+
+Splits content into smaller chunks of 7–12 words
+
+Groups chunks into sets of 10 for vectorization
+
+Preserves metadata for downstream processing
+
+
+###  2️⃣ Vectorization
+
+```bash
+export async function vectorize(chunks) { ... }
+export async function vectorizecorporate(chunks) { ... }
+```
+
+Sends text chunks to FastAPI embedding endpoints:
+
+/embed → general results
+
+/embedcorporate → corporate data
+
+Logs request, response, and errors in JSON format
+
+Emits statusChanged events for workflow synchronization
+
+
+###  3️⃣ LLM Integration
+
+```bash
+export async function goingToLLM(htmlTextArray) { ... }
+```
+
+Uses Google Generative Language API (gemini-2.0-flash) to generate Q&A from site text
+
+####  Returns clean JSON with:
+
+question
+
+options array
+
+Attaches original site metadata
+
+Handles malformed JSON gracefully
+
+
+###  4️⃣ Vectorized Search
+
+```bash
+async function searchVectorDB(question, options, metadata) { ... }
+```
+
+Sends Q&A to vectorized database
+
+Returns best answer and full ranking from vectorembedgen
+
+Logs structured information:
+
+Question
+
+Best answer
+
+URL of source
+
+
+```bash
+export async function directToLLM(result) { ... }
+```
+
+Converts result.resultssite to Q&A using LLM
+
+Sends each question to vectorized search
+
+Streams best answers to SSE clients via handleResultToStream
+
+Structured logging of every processed Q&A
+
+
+###  5️⃣ Corporate Vectorization
+
+```bash
+export async function handleResult(result) { ... }
+```
+
+Handles both internal corporate tables and external search results
+
+Cleans and chunks data
+
+Calls appropriate vectorization endpoint
+
+Logs success or warnings for missing chunks
+
+###  6️⃣ Utility Logging
+
+logResultVariable(result) → logs search result received from backend
+
+logBestVariable(best) → logs best vectorized search result
+
+logVectorizedCorporate(vectorized) → logs corporate vectorization
+
+All logs are structured in JSON for monitoring and observability.
+
+
+#### 🔗 Workflow
+
+```bash
+Raw results → cleanAndChunk → vectorize / vectorizecorporate → handleResult
+LLM processing → goingToLLM → searchVectorDB → directToLLM → SSE stream
+```
